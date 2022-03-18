@@ -53,7 +53,7 @@ class User extends Authenticatable
      */
     public function loadRelationshipCounts()
     {
-        $this->loadCount(['microposts', 'followings', 'followers']);
+        $this->loadCount(['microposts', 'followings', 'followers', 'favorites']);
     }
     
     
@@ -61,23 +61,9 @@ class User extends Authenticatable
     /**
      * このユーザがフォロー中のユーザ。（ Userモデルとの関係を定義）
      */
-
     public function followings()
     {
-        // idの値でユーザを検索して取得
-        $user = User::findOrFail($id);
-
-        // 関係するモデルの件数をロード
-        $user->loadRelationshipCounts();
-
-        // ユーザのフォロー一覧を取得
-        $followings = $user->followings()->paginate(10);
-
-        // フォロー一覧ビューでそれらを表示
-        return view('users.followings', [
-            'user' => $user,
-            'users' => $followings,
-        ]);
+        return $this->belongsToMany(User::class, 'user_follow', 'user_id', 'follow_id')->withTimestamps();
     }
 
     /**
@@ -85,20 +71,15 @@ class User extends Authenticatable
      */
     public function followers()
     {
-        // idの値でユーザを検索して取得
-        $user = User::findOrFail($id);
-
-        // 関係するモデルの件数をロード
-        $user->loadRelationshipCounts();
-
-        // ユーザのフォロワー一覧を取得
-        $followers = $user->followers()->paginate(10);
-
-        // フォロワー一覧ビューでそれらを表示
-        return view('users.followers', [
-            'user' => $user,
-            'users' => $followers,
-        ]);
+        return $this->belongsToMany(User::class, 'user_follow', 'follow_id', 'user_id')->withTimestamps();
+    }
+    
+    /**
+     * お気に入りと投稿を結びつける
+     */
+    public function favorites()
+    {
+        return $this->belongsToMany(Micropost::class, 'favorite_posts', 'user_id', 'favorite_id')->withTimestamps();
     }
 
 
@@ -158,6 +139,40 @@ class User extends Authenticatable
     {
         // フォロー中ユーザの中に $userIdのものが存在するか
         return $this->followings()->where('follow_id', $userId)->exists();
+    }
+    
+    public function favorite($micropostId)
+    {
+        // すでにお気に入り登録しているか
+        $exist = $this->is_favoriting($micropostId);
+
+        if ($exist) {
+            return false;
+        } else {
+            $this->favorites()->attach($micropostId);
+            return true;
+        }
+        
+    }
+    
+    public function unfavorite($micropostId)
+    {
+        // すでにお気に入り登録しているか
+        $exist = $this->is_favoriting($micropostId);
+
+        if ($exist) {
+            $this->favorites()->detach($micropostId);
+            return true;
+        } else {
+            return false;
+        }
+
+    }
+    
+    public function is_favoriting($micropostId){
+        // お気に入り登録を既にしているかどうか
+        return $this->favorites()->where('favorite_id', $micropostId)->exists();
+        
     }
     
     public function feed_microposts()
